@@ -40,9 +40,29 @@ let
     ++ lib.optional (cfg.extraConfig != "") (pkgs.writeText "umap-extra.conf" cfg.extraConfig)
   );
 
+  # Only these end up in STATICFILES_DIRS (see umap/settings/__init__.py).
+  # extraConfig is excluded as well: it may read secrets at runtime.
+  staticSettings = lib.filterAttrs (
+    name: _:
+    lib.elem name [
+      "STATICFILES_DIRS"
+      "UMAP_CUSTOM_STATICS"
+      "UMAP_PICTOGRAMS_COLLECTIONS"
+    ]
+  ) cfg.settings;
+
+  staticRoot =
+    if staticSettings == cfg.package.staticSettings then
+      "${cfg.package}/share/umap/static"
+    else
+      pkgs.runCommand "umap-${cfg.package.version}-static" {
+        UMAP_SETTINGS = settingsFormat.generate "umap-static.conf" staticSettings;
+        STATIC_ROOT = placeholder "out";
+      } "${lib.getExe cfg.package} collectstatic --no-input";
+
   env = {
     HOME = stateDir;
-    STATIC_ROOT = "${stateDir}/static";
+    STATIC_ROOT = staticRoot;
     UMAP_SETTINGS = "${configFile}";
   }
   // lib.optionalAttrs (cfg.settings.DATABASE_URL != null) {
@@ -168,6 +188,10 @@ in
         ```python
         exec(open("/run/secrets/umap-settings.py").read())
         ```
+
+        `UMAP_CUSTOM_STATICS` and `UMAP_PICTOGRAMS_COLLECTIONS` belong in
+        {option}`services.umap.settings`: the statics are collected from those,
+        not from this.
       '';
       type = types.lines;
       default = "";
@@ -201,6 +225,25 @@ in
             type = types.bool;
             default = true;
             description = "Whether to allow anonymous map creation.";
+          };
+          UMAP_PICTOGRAMS_COLLECTIONS = lib.mkOption {
+            type = types.attrsOf (types.attrsOf types.str);
+            default = cfg.package.staticSettings.UMAP_PICTOGRAMS_COLLECTIONS;
+            defaultText = lib.literalMD "the [Maki](https://labs.mapbox.com/maki-icons/) icon set shipped with {option}`services.umap.package`";
+            description = ''
+              Marker icon collections, keyed by the name Umap lists them under.
+              Each `path` holds a `pictograms` directory with one subdirectory
+              per category, as described in the
+              [upstream documentation](https://docs.umap-project.org/en/stable/config/icons/).
+            '';
+            example = lib.literalExpression ''
+              {
+                Pinhead = {
+                  path = "''${pinheadPictograms}";
+                  attribution = "Wayside Mapping";
+                };
+              }
+            '';
           };
           SITE_URL = lib.mkOption {
             type = types.str;
@@ -304,7 +347,7 @@ in
       REALTIME_ENABLED = lib.mkOptionDefault cfg.redis.createLocally;
       MEDIA_ROOT = lib.mkOptionDefault "${stateDir}/uploads";
       AJAX_PROXY_CACHE_DIR = lib.mkOptionDefault cacheDir;
-      # nginx (umap group) serves uploaded media and collected statics, which the service UMask would otherwise create unreadable.
+      # nginx (umap group) serves uploaded media, which the service UMask would otherwise create unreadable.
       FILE_UPLOAD_DIRECTORY_PERMISSIONS = lib.mkOptionDefault (settingsFormat.lib.mkRaw "0o750");
       LOGGING = lib.mkOptionDefault {
         version = 1;
@@ -377,13 +420,7 @@ in
       environment = env;
 
       preStart = ''
-        setupStamp="${stateDir}/.setup-stamp"
-        wantStamp="${cfg.package} ${configFile}"
-        if [[ "$(cat "$setupStamp" 2>/dev/null)" != "$wantStamp" ]]; then
-          umap collectstatic --no-input --clear
-          umap migrate --no-input
-          echo "$wantStamp" > "$setupStamp"
-        fi
+        umap migrate --no-input
 
         # Skip the startup cost when a key is already in the environment, either
         # from environmentFile or from a previous run.
@@ -475,7 +512,7 @@ in
             '';
           };
           "/static/" = {
-            alias = "${stateDir}/static/";
+            alias = "${staticRoot}/";
             extraConfig = ''
               autoindex off;
               access_log off;

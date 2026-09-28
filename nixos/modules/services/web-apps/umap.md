@@ -32,16 +32,15 @@ standard OpenStreetMap tiles at
 `https://tile.openstreetmap.org/{z}/{x}/{y}.png`. See the
 [upstream documentation](https://docs.umap-project.org/en/stable/config/admin/).
 
-## Custom pictograms {#module-services-umap-pictograms}
+## Marker icons {#module-services-umap-pictograms}
 
-Umap ships no marker icons. Icon collections are served from the Nix store via
-`UMAP_PICTOGRAMS_COLLECTIONS`; see the
+Umap ships no marker icons of its own, so this module serves the
+[Maki](https://labs.mapbox.com/maki-icons/) collection from the Nix store. The
 [upstream documentation](https://docs.umap-project.org/en/stable/config/icons/)
-for icon libraries to choose from.
+lists other icon libraries to choose from.
 
-Icons must sit directly in `pictograms/<category>/`. Umap scans exactly one
-level of categories and skips anything deeper without an error, so most icon
-sets need rearranging to match:
+Icons must sit directly in `pictograms/<category>/`. Umap scans one level of
+categories and silently ignores anything deeper, so most sets need rearranging:
 
 ```nix
 let
@@ -65,3 +64,6 @@ in
   };
 }
 ```
+
+This replaces Maki. To keep it alongside, merge
+`pkgs.umap.staticSettings.UMAP_PICTOGRAMS_COLLECTIONS` into the value.

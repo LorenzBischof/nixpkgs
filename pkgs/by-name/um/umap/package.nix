@@ -2,12 +2,15 @@
   lib,
   python3,
   fetchFromGitHub,
+  formats,
   writeShellScript,
   makeWrapper,
   nixosTests,
   postgresql,
   postgresqlTestHook,
   playwright-driver,
+  runCommand,
+  maki,
 }:
 let
   python = python3.override {
@@ -17,6 +20,20 @@ let
     };
   };
 
+  # Umap only scans categories one level below a `pictograms` root; maki is flat.
+  pictograms = runCommand "umap-pictograms-maki-${maki.version}" { } ''
+    mkdir -p $out/pictograms
+    ln -s ${maki}/share/maki/icons $out/pictograms/Maki
+  '';
+
+  staticSettings = {
+    UMAP_PICTOGRAMS_COLLECTIONS.Maki = {
+      path = "${pictograms}";
+      attribution = "Mapbox";
+    };
+  };
+
+  staticConf = (formats.pythonVars { }).generate "umap-static.conf" staticSettings;
 in
 python.pkgs.buildPythonApplication (finalAttrs: {
   pname = "umap";
@@ -73,6 +90,7 @@ python.pkgs.buildPythonApplication (finalAttrs: {
   ];
 
   passthru = {
+    inherit staticSettings;
     tests = { inherit (nixosTests) umap; };
     pythonPath = "${finalAttrs.finalPackage}/${python.sitePackages}:${python.pkgs.makePythonPath finalAttrs.passthru.dependencies}";
   };
@@ -92,6 +110,13 @@ python.pkgs.buildPythonApplication (finalAttrs: {
       makeWrapper ${start_script} $out/bin/umap-serve \
         --prefix PYTHONPATH : "$out/${python.sitePackages}" \
         --prefix PYTHONPATH : "${pythonPath}"
+
+      # Minifying and hashing every static takes tens of seconds, so do it once
+      # here instead of on every service start.
+      PYTHONPATH="$out/${python.sitePackages}:${pythonPath}" \
+        UMAP_SETTINGS="${staticConf}" \
+        STATIC_ROOT="$out/share/umap/static" \
+        $out/bin/umap collectstatic --no-input
     '';
 
   nativeCheckInputs =

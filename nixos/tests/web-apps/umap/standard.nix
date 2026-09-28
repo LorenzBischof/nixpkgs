@@ -1,11 +1,4 @@
 { pkgs, ... }:
-let
-  pictograms = pkgs.runCommand "umap-test-pictograms" { } ''
-    mkdir -p $out/pictograms/test
-    printf 'pictogram-collection-ok' > $out/pictograms/test/marker.svg
-  '';
-  customStatics = pkgs.writeTextDir "custom/test-custom.css" "body { color: red; }";
-in
 {
   name = "umap-standard";
 
@@ -16,11 +9,7 @@ in
     {
       services.umap = {
         enable = true;
-        settings = {
-          SITE_URL = "http://localhost";
-          UMAP_PICTOGRAMS_COLLECTIONS.Test.path = "${pictograms}";
-          UMAP_CUSTOM_STATICS = "${customStatics}";
-        };
+        settings.SITE_URL = "http://localhost";
       };
     };
 
@@ -46,9 +35,9 @@ in
           machine.succeed("curl -sSfL http://localhost/static/" + manifest["paths"]["umap/base.css"])
           # The frontend requests some paths without the manifest hash, e.g. the default marker icon
           machine.succeed("curl -sSfL -o /dev/null http://localhost/static/umap/img/marker.svg")
-
-      with subtest("Custom static file is served"):
-          machine.succeed("curl -sSfL http://localhost/static/" + manifest["paths"]["custom/test-custom.css"])
+          # The default pictogram collection is symlinked into the package statics
+          machine.succeed("curl -sSfL -o /dev/null http://localhost/static/pictograms/Maki/airport.svg")
+          machine.succeed("curl -sSfL http://localhost/pictogram/json/ | grep -q pictograms/Maki")
 
       with subtest("The umap user can reach the local Redis socket"):
           machine.succeed(
@@ -109,29 +98,13 @@ in
           """)
           machine.succeed("curl -sSfL http://localhost/uploads/pictogram/icon.svg | grep -q db-pictogram-ok")
 
-      with subtest("Pictogram collection is served from the nix store via nginx"):
-          src = machine.succeed(
-              "curl -sSfL http://localhost/pictogram/json/ | "
-              "grep -oE '/static/pictograms/[^\"]+' | head -1"
-          ).strip()
-          assert src, "pictogram collection not listed"
-          machine.succeed(f"curl -sSfL http://localhost{src} | grep -q pictogram-collection-ok")
+      with subtest("Statics are never collected at runtime"):
+          machine.fail("journalctl -u umap.service | grep -q 'static files copied'")
 
-      with subtest("Statics are not collected again on an unchanged restart"):
-          # collectstatic --clear empties STATIC_ROOT, so the sentinel only
-          # survives a restart that skipped the collection.
-          machine.succeed("touch ${staticRoot}/sentinel")
+      with subtest("The service comes back up after a restart"):
           machine.systemctl("restart umap.service")
           machine.wait_for_unit("umap.service")
           machine.wait_for_file("/run/umap/umap.sock")
-          machine.succeed("test -e ${staticRoot}/sentinel")
-
-      with subtest("A stamp that no longer matches collects the statics again"):
-          machine.succeed("echo stale > /var/lib/umap/.setup-stamp")
-          machine.systemctl("restart umap.service")
-          machine.wait_for_unit("umap.service")
-          machine.wait_for_file("/run/umap/umap.sock")
-          machine.fail("test -e ${staticRoot}/sentinel")
           machine.succeed("curl -sSfL -o /dev/null http://localhost/static/umap/img/marker.svg")
     '';
 }
