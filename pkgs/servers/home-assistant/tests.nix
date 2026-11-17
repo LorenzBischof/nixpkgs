@@ -145,6 +145,11 @@ let
   };
 
   extraDisabledTests = {
+    cloud = [
+      # [2026.11.1] sdist translations already rename "Home Assistant Cloud" to "Home Assistant Link"
+      # https://github.com/home-assistant/core/pull/190621
+      "test_agents_upload_fail_non_retryable"
+    ];
     conversation = lib.optionals stdenv.hostPlatform.isAarch64 [
       # intent fixture mismatch on aarch64
       "test_error_no_device_on_floor"
