@@ -38,6 +38,10 @@ stdenv.mkDerivation (finalAttrs: {
   postPatch = ''
     # get rid of bundled CMake toolchain files
     rm cmake/toolchain_*
+
+    # fdlibm's __HI/__LO pointer casts break strict aliasing; GCC 16 miscompiles tan()
+    substituteInPlace jerry-math/CMakeLists.txt \
+      --replace-fail "-Wno-strict-aliasing" "-Wno-strict-aliasing -fno-strict-aliasing"
   '';
 
   nativeBuildInputs = [
