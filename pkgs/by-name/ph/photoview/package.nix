@@ -28,7 +28,7 @@ buildGoModule (finalAttrs: {
     hash = "sha256-ZfvBdQlyqONsrviZGL22Kt+AiPaVWwdoREDUrHDYyIs=";
   };
 
-  vendorHash = "sha256-Tn4OxSV41s/4n2Q3teJRJNc39s6eKW4xE9wW/CIR5Fg=";
+  vendorHash = "sha256-S41LC5qtZ8z4mPdDDZo97hqnK/5BjXsiXCKmJCJ6gOM=";
 
   modRoot = "api";
 
@@ -44,6 +44,10 @@ buildGoModule (finalAttrs: {
     blas
     lapack
   ];
+
+  # Update Go bindings for libheif's enum type changes.
+  # https://github.com/strukturag/libheif/commit/66c5196d3ba3b1decb40e068eca34d39731c5c86
+  patches = [ ./libheif-bump.patch ];
 
   postInstall = ''
     # Install face recognition models
