@@ -108,7 +108,14 @@ buildPgrxExtension (finalAttrs: {
     maintainers = [ lib.maintainers.lucperkins ];
     # For a list of versions, look under the features dictionary in:
     # https://github.com/paradedb/paradedb/tree/${version}/pg_search/Cargo.toml
-    broken = lib.versionOlder postgresql.version "15";
+    # PostgreSQL 19 is not yet supported
+    # See https://github.com/paradedb/paradedb/issues/5405
+    # Check after next package update.
+    broken =
+      lib.versionOlder postgresql.version "15"
+      || lib.warnIf (finalAttrs.version != "0.25.10") "Is postgresql19Packages.pg_search still broken?" (
+        lib.versionAtLeast postgresql.version "19"
+      );
     platforms = postgresql.meta.platforms;
   };
 })
