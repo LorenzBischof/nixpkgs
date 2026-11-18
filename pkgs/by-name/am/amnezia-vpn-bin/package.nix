@@ -88,7 +88,10 @@ stdenv.mkDerivation (finalAttrs: {
 
     mkdir -p $out/share/amnezia-vpn $out/bin $out/share/applications $out/lib/systemd/system $out/share/icons/hicolor/512x512/apps
 
-    bsdtar -xf AmneziaVPN_Linux_Installer.bin -C $out/share/amnezia-vpn
+    # The embedded 7z archive starts beyond libarchive's 8 MiB SFX seek limit.
+    # https://github.com/libarchive/libarchive/blob/v3.8.10/libarchive/archive_read_support_format_7zip.c
+    tail -c +28046178 AmneziaVPN_Linux_Installer.bin > payload.7z
+    bsdtar -xf payload.7z -C $out/share/amnezia-vpn
 
     makeWrapper "$out/share/amnezia-vpn/client/bin/AmneziaVPN" "$out/bin/AmneziaVPN" \
       --prefix LD_LIBRARY_PATH : "$out/share/amnezia-vpn/client/lib" \
