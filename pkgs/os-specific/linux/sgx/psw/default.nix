@@ -110,6 +110,24 @@ stdenv.mkDerivation (finalAttrs: {
       ];
     in
     ''
+      # abseil (via protobuf) requires the C++ standard it was built with (C++20)
+      substituteInPlace psw/uae_service/linux/Makefile \
+        --replace-fail "CXXFLAGS += -fPIC" "CXXFLAGS += -std=c++20 -fPIC"
+      substituteInPlace psw/ae/aesm_service/source/CMakeLists.txt \
+        --replace-fail "set(CMAKE_CXX_STANDARD 17)" "set(CMAKE_CXX_STANDARD 20)"
+
+      # GCC 16 warns (fatal with -Werror) about regparm, which only applies to i386
+      substituteInPlace psw/urts/tcs.cpp \
+        --replace-fail "regparm(3)," ""
+      substituteInPlace psw/urts/linux/debugger_support.cpp \
+        --replace-fail "__attribute__((regparm(3)))" ""
+
+      # GCC 16 flags the unused counter, fatal with -Werror; removed upstream in
+      # https://github.com/CppMicroServices/CppMicroServices/pull/932
+      substituteInPlace external/CppMicroServices/framework/src/service/ServiceListeners.cpp \
+        --replace-fail "int n = 0;" "" \
+        --replace-fail "++n;" ""
+
       patchShebangs \
         external/sgx-emm/create_symlink.sh \
         linux/installer/bin/build-installpkg.sh \
