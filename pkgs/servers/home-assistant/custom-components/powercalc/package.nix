@@ -2,6 +2,7 @@
   lib,
   buildHomeAssistantComponent,
   fetchFromGitHub,
+  fetchpatch2,
 
   # dependencies
   numpy,
@@ -10,9 +11,10 @@
   aioresponses,
   gitMinimal,
   gitpython,
+  home-assistant,
   jsonschema,
   pytest-freezegun,
-  pytest-homeassistant-custom-component,
+  pytest-homeassistant,
   pytestCheckHook,
 }:
 
@@ -28,17 +30,34 @@ buildHomeAssistantComponent (finalAttrs: {
     hash = "sha256-cutPSIXOPrA1PkFbgRxZWoiQxpS/nbaJvKdBKJJ+Ne0=";
   };
 
+  patches = [
+    # Migrate tests to pytest-homeassistant for Home Assistant 2026.11
+    # https://github.com/bramstroker/homeassistant-powercalc/pull/5202
+    (fetchpatch2 {
+      url = "https://github.com/bramstroker/homeassistant-powercalc/commit/d6b4db627e9d12be94288a1248de580a53f12f82.patch?full_index=1";
+      excludes = [
+        "tests/strategy/test_battery_rate.py"
+        "uv.lock"
+      ];
+      hash = "sha256-srRh7hl1FraslYwYRqsnTpa7paJSvlSZ77kYrmqcFY0=";
+    })
+  ];
+
   dependencies = [ numpy ];
 
   nativeCheckInputs = [
     aioresponses
     gitMinimal
     gitpython
+    home-assistant
     jsonschema
     pytest-freezegun
-    pytest-homeassistant-custom-component
+    pytest-homeassistant
     pytestCheckHook
   ];
+
+  # tests share tests/testing_config/.storage, so parallel workers race on it
+  dontUsePytestXdist = true;
 
   preCheck = ''
     patchShebangs --build tests/setup.sh
