@@ -85,6 +85,9 @@ buildPythonPackage (finalAttrs: {
   # Tests live inside the package: run them against the installed copy, which has the
   # compiled extension.
   preCheck = ''
+    # Other tests change the absl logger's level; assertLogs must set it on that logger.
+    substituteInPlace "$out/${python.sitePackages}/grain/_src/python/grain_logging_test.py" \
+      --replace-fail 'with self.assertLogs() as cm:' 'with self.assertLogs(absl_logging.get_absl_logger()) as cm:'
     rm -rf grain
   '';
   enabledTestPaths = [
